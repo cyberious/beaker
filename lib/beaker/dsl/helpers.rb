@@ -28,7 +28,7 @@ module Beaker
     # @api dsl
     module Helpers
 
-      PUPPET_MODULE_INSTALL_IGNORE = ['.git', '.idea', '.vagrant', '.vendor', 'acceptance', 'spec', 'tests', 'log']
+      PUPPET_MODULE_INSTALL_IGNORE = ['.bundle', '.git', '.idea', '.vagrant', '.vendor', 'acceptance', 'spec', 'tests', 'log']
 
       # @!macro common_opts
       #   @param [Hash{Symbol=>String}] opts Options to alter execution.
@@ -476,7 +476,7 @@ module Beaker
       # @note This method assumes puppet is installed on the host.
       #
       def puppet_user(host)
-        return host.puppet('master')['group']
+        return host.puppet('master')['user']
       end
 
       # Return the name of the puppet group.
@@ -486,7 +486,7 @@ module Beaker
       # @note This method assumes puppet is installed on the host.
       #
       def puppet_group(host)
-        return host.puppet('master')['user']
+        return host.puppet('master')['group']
       end
 
       # @!visibility private
@@ -571,7 +571,7 @@ module Beaker
         curl_retries = host['master-start-curl-retries'] || options['master-start-curl-retries']
         logger.debug "Setting curl retries to #{curl_retries}"
 
-        if options[:is_jvm_puppet]
+        if options[:is_puppetserver]
           confdir = host.puppet('master')['confdir']
           vardir = host.puppet('master')['vardir']
 
@@ -588,13 +588,13 @@ module Beaker
             end
           end
 
-          jvm_puppet_opts = { "jruby-puppet" => {
+          puppetserver_opts = { "jruby-puppet" => {
             "master-conf-dir" => confdir,
             "master-var-dir" => vardir,
           }}
 
-          jvm_puppet_conf = File.join("#{host['jvm-puppet-confdir']}", "jvm-puppet.conf")
-          modify_tk_config(host, jvm_puppet_conf, jvm_puppet_opts)
+          puppetserver_conf = File.join("#{host['puppetserver-confdir']}", "puppetserver.conf")
+          modify_tk_config(host, puppetserver_conf, puppetserver_opts)
         end
 
         begin
@@ -1301,7 +1301,7 @@ module Beaker
       # Install local module for acceptance testing
       # should be used as a presuite to ensure local module is copied to the hosts you want, particularly masters
       # @api dsl
-      # @param [Host, Array<Host>, String, Symbol] host
+      # @param [Host, Array<Host>] host
       #                   One or more hosts to act upon,
       #                   or a role (String or Symbol) that identifies one or more hosts.
       # @option opts [String] :source ('./')
@@ -1318,17 +1318,19 @@ module Beaker
       # @raise [ArgumentError] if not host is provided or module_name is not provided and can not be found in Modulefile
       #
       def copy_module_to(host, opts = {})
-        opts = {:source => './',
-                :target_module_path => host['distmoduledir'],
-                :ignore_list => PUPPET_MODULE_INSTALL_IGNORE}.merge(opts)
-        ignore_list = build_ignore_list(opts)
-        target_module_dir = opts[:target_module_path]
         if opts.has_key?(:module_name)
           module_name = opts[:module_name]
         else
           module_name = parse_for_modulename(opts[:source])
         end
-        scp_to host, File.join(opts[:source]), File.join(target_module_dir, module_name), {:ignore => ignore_list}
+        Array.new(host).each do |host|
+          opts = {:source => './',
+                :target_module_path => host['distmoduledir'],
+                :ignore_list => PUPPET_MODULE_INSTALL_IGNORE}.merge(opts)
+          ignore_list = build_ignore_list(opts)
+          target_module_dir = opts[:target_module_path]
+          scp_to host, File.join(opts[:source]), File.join(target_module_dir, module_name), {:ignore => ignore_list}
+        end
       end
       alias :copy_root_module_to :copy_module_to
 
